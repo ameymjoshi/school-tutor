@@ -2,6 +2,8 @@
 
 A Markdown-based multi-agent system designed to help CBSE Class 8 students learn topics through an interactive teach-quiz-revise cycle.
 
+Built to explore multi-agent architectures using file-based coordination — no LLM API calls required, making it fully portable and LLM-agnostic.
+
 ## Features
 
 - **4 Markdown-Based Agents**: Main (Orchestrator), Teach-Me, Quiz-Me, and Revision Agent
