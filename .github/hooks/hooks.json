@@ -1,0 +1,13 @@
+{
+  "$schema": "https://github.com",
+  "version": "1.0.0",
+  "hooks": [
+    {
+      "name": "Check Spaced Repetition Schedule on Boot",
+      "event": "sessionStart",
+      "action": "command",
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .github/hooks/scripts/check_due_reviews.ps1",
+      "timeout": 5
+    }
+  ]
+}
