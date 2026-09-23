@@ -1,109 +1,87 @@
-# CBSE Class 8 Multi-Agent Learning System
+# School Tutor — CBSE Multi-Agent Learning System
 
-A Markdown-based multi-agent system designed to help CBSE Class 8 students learn topics through an interactive teach-quiz-revise cycle.
+A multi-agent system that helps school students learn CBSE-aligned subjects through an interactive **teach → quiz → revise** cycle, with spaced repetition (Leitner system) for long-term retention.
 
-Built to explore multi-agent architectures using file-based coordination — no LLM API calls required, making it fully portable and LLM-agnostic.
+Every agent is defined as a Markdown prompt file — there is no application code. The system runs in any environment that supports Copilot-style chat agents (e.g. VS Code), making it fully LLM-agnostic and trivially portable.
 
-## Features
+## Architecture
 
-- **4 Markdown-Based Agents**: Main (Orchestrator), Teach-Me, Quiz-Me, and Revision Agent
-- **File-Based Communication**: All agents communicate via Markdown (.md) files
-- **Adaptive Learning**: Repeats quizzes until 90% mastery is achieved
-- **Spaced Repetition**: Revision agent focuses on weak areas
-- **CBSE NCERT Level**: Content tailored for Class 8 students
-- **LLM-Ready**: Agent instructions in Markdown for easy LLM integration
+Four agents live in `.github/agents/`:
 
-## Project Structure
+| Agent | Invocable | Role |
+|-------|-----------|------|
+| `tutor` | Yes | Primary orchestrator. Parses student details, builds the per-student workspace, runs the boot-time review gate, and coordinates the learning loop |
+| `teach-me` | No | Interactive Socratic teacher. Explains subtopics one-by-one with real-life analogies and check questions; re-teaches weak areas with fresh analogies |
+| `quiz-me` | No | Independent examiner. Generates quizzes, grades answers against a hidden answer key, and produces evaluation reports |
+| `memory-booster` | Yes | Retention specialist. Manages the Leitner-box spaced repetition schedule (1 / 3 / 7 / 14 days) and conducts 3-question flash reviews |
+
+## The Learning Loop
+
+1. **Initialize** — The `tutor` agent parses `studentName`, `class`, `subject`, and `topic`, and resolves the workspace to `data/<class>/<studentName>/<subject>/<topic>/`.
+2. **Boot gate** — Before any new teaching, `memory-booster` checks for due spaced-repetition reviews. If reviews are due, they run first.
+3. **Teach** — `teach-me` splits the topic into subtopics and explains each with an analogy and 2–3 inline check questions. Notes accumulate in `topic.md`.
+4. **Quiz** — `quiz-me` generates a mixed-format quiz (`quiz.md`) with a hidden answer key (`.hidden_answer_key.md`) the student never sees. The student writes answers in `answers.md`.
+5. **Grade** — `quiz-me` grades strictly and writes `evaluation.md` with the score and identified weak subtopics.
+6. **Remediate or master** — Below 90%, `teach-me` re-teaches only the weak subtopics with completely fresh analogies, and the loop repeats. At 90%+ the topic is marked `MASTERED`.
+7. **Retain** — `memory-booster` logs the mastered topic into a Leitner schedule. On future sessions, 3-question flash reviews confirm retention; passing advances the interval, failing demotes the topic to Box 1 and can trigger a full conceptual rewrite of the lesson.
+
+## Repository Structure
 
 ```
-school-tutor-1/
-├── agents/
-│   ├── main_agent.md       # Orchestrator instructions
-│   ├── teach_agent.md      # Teach-Me Agent instructions
-│   ├── quiz_agent.md      # Quiz-Me Agent instructions
-│   └── revision_agent.md  # Revision Agent instructions
-├── utils/
-│   └── file_handler.py    # File I/O operations
-├── data/                   # Generated files (topic.md, quiz.md, etc.)
-├── main.py                 # Python runner
-└── README.md
+school-tutor/
+├── .github/
+│   ├── agents/                    # Agent prompt definitions
+│   │   ├── tutor.agent.md         # Primary orchestrator (entry point)
+│   │   ├── teach-me.agent.md
+│   │   ├── quiz-me.agent.md
+│   │   └── memory-booster.agent.md
+│   └── hooks/
+│       ├── hooks.json             # Registers the sessionStart hook
+│       └── scripts/
+│           └── check_due_reviews.ps1   # Scans schedules, alerts on due reviews
+├── data/                          # Student workspaces (state, notes, schedules)
+└── doc/dia/                       # Architecture diagrams
 ```
 
-## How It Works
+## Per-Student Workspace
 
-1. **Main Agent** asks for Subject and Topic
-2. **Teach-Me Agent** creates `topic.md` with explanations and examples
-3. **Quiz-Me Agent** generates `quiz.md` with 10 questions
-4. Student answers the quiz
-5. **Evaluation** creates `evaluation.md` with score and weak areas
-6. If score < 90%, **Revision Agent** creates `revision.md`
-7. Process repeats until mastery (90%+) is achieved
+Each student's data is isolated under `data/<class>/<studentName>/`:
 
-## File Communication
+| File | Created by | Purpose |
+|------|-----------|--------|
+| `state.md` | `tutor` | Append-only session ledger (never overwritten) |
+| `topic.md` | `teach-me` | Reference notes per subtopic, with analogies |
+| `quiz.md` | `quiz-me` | Question sheet only — no answers |
+| `.hidden_answer_key.md` | `quiz-me` | Answer key and grading criteria (hidden) |
+| `answers.md` | Student | The student's own quiz responses |
+| `evaluation.md` | `quiz-me` | Score, percentage, weak subtopics |
+| `memory_schedule.md` | `memory-booster` | Leitner tracker across all subjects |
+| `review_quiz.md` / `review_answers.md` | `memory-booster` | Ephemeral flash-review files, deleted after grading |
 
-| File | Created By | Purpose |
-|------|-----------|---------|
-| `topic.md` | Teach-Me Agent | Lesson content with explanations |
-| `quiz.md` | Quiz-Me Agent | 10 questions (5 MCQ + 3 Short + 2 Application) |
-| `evaluation.md` | Main Agent | Score, percentage, weak areas |
-| `revision.md` | Revision Agent | Focused revision material |
-| `state.md` | Main Agent | Progress tracking |
+## Session Hook
+
+`hooks.json` registers a `sessionStart` hook that runs `check_due_reviews.ps1`. The script recursively scans `data/` for every student's `memory_schedule.md`, flags topics whose next review date is due or overdue, and surfaces them so reviews happen before new material is introduced.
+
+> Note: the hook script is PowerShell and currently targets Windows environments.
 
 ## Usage
 
-```bash
-python main.py
+In an agent-capable editor (e.g. VS Code with Copilot chat), invoke the `tutor` agent with the student's details:
+
+```
+Abir, Class 9, Science, Agriculture
 ```
 
-Then follow the prompts:
-1. Enter Subject (e.g., Mathematics)
-2. Enter Topic (e.g., Linear Equations)
-3. Study the generated `data/topic.md`
-4. Answer questions in `data/quiz.md`
-5. Review `data/evaluation.md` and `data/revision.md` if needed
+The orchestrator takes it from there — teaching, quizzing, grading, remediation, and long-term retention scheduling all run autonomously, pausing only for student input.
 
-## Agent Instructions (Markdown)
+## Design Principles
 
-Each agent's behavior is defined in a Markdown file:
-
-- **`agents/main_agent.md`**: Orchestration logic, state management, evaluation rules
-- **`agents/teach_agent.md`**: How to break down topics, explain concepts, create examples
-- **`agents/quiz_agent.md`**: How to generate MCQs, short answers, application questions
-- **`agents/revision_agent.md`**: How to create flashcards, retry questions, focus on weak areas
-
-## LLM Integration
-
-To integrate with an LLM:
-
-1. Read the appropriate `.md` file from `agents/` folder
-2. Extract the instructions
-3. Call LLM with the instructions + input
-4. Parse LLM response and write to output file
-
-Example:
-```python
-# Pseudo-code for LLM integration
-teach_instructions = read_file("agents/teach_agent.md")
-prompt = f"{teach_instructions}\n\nInput:\nSubject: {subject}\nTopic: {topic}"
-response = llm_call(prompt)
-write_file("data/topic.md", response)
-```
-
-## Technical Details
-
-- **Language**: Python 3.x (minimal - only for orchestration)
-- **Agent Definitions**: Markdown (ready for LLM)
-- **No external dependencies** (uses only Python standard library)
-- **File-based state management** (no database required)
-
-## Future Enhancements
-
-- [ ] Integrate actual LLM (GPT, Claude, etc.)
-- [ ] Parse actual student answers from quiz.md
-- [ ] Implement proper spaced repetition algorithm
-- [ ] Add support for multiple topics per session
-- [ ] Add more question types and difficulty levels
+- **Agents as Markdown** — every behavior is a prompt file; no SDK or API code to maintain
+- **Academic integrity** — answer keys are hidden from the student's view path
+- **Append-only state** — session history is a ledger, never edited
+- **Token efficiency** — grading reads only the student's answers and the key, not full lesson files
+- **Spaced repetition** — mastered topics are re-verified at scientific intervals (1 / 3 / 7 / 14 days)
 
 ## License
 
-Educational use - CBSE NCERT aligned content.
+Educational use — CBSE NCERT-aligned content.
