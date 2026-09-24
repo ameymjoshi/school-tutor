@@ -1,4 +1,4 @@
-# CBSE AI Tuition Agentic Workspace
+# CBSE AI Tutor
 
 This repository houses a production-ready, highly token-efficient multi-agent architecture built for **GitHub Copilot** (or any agentic markdown runtime workspace). The platform facilitates an end-to-end learning lifecycle for CBSE curriculum students, balancing immediate short-term concept mastery with long-term memory retention through structured, automated agent hand-offs.
 
