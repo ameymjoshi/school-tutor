@@ -18,20 +18,31 @@ if ($scheduleFiles.Count -eq 0) {
 $currentDate = (Get-Date).ToString("yyyy-MM-dd")
 $dueAlerts = [System.Collections.Generic.List[string]]::new()
 
-# Loop through each child's schedule file discovered dynamically
+# Loop through each student's schedule file discovered dynamically
 foreach ($file in $scheduleFiles) {
-    # Extract the child's name from the parent folder path
+    # Extract the student's name from the directory path
     $childName = $file.Directory.Name
     
     Get-Content $file.FullName | ForEach-Object {
         if ($_ -like "*|*" -and $_ -match "Box \d") {
             $columns = $_.Split('|') | ForEach-Object { $_.Trim() }
-            if ($columns.Count -ge 6) {
+            # Support both 7-column (concept-level) and legacy 6-column formats
+            if ($columns.Count -ge 8) {
+                # Format: | Subject | Topic | Concept | Current Box | Last Reviewed | Next Review Due | Status |
+                $subject = $columns[1]
+                $topic   = $columns[2]
+                $concept = $columns[3]
+                $nextDue = $columns[6]
+
+                if ($nextDue -le $currentDate) {
+                    $dueAlerts.Add("[$childName] $subject -> $topic ($concept)")
+                }
+            } elseif ($columns.Count -ge 7) {
+                # Legacy format: | Subject | Topic | Current Box | Last Reviewed | Next Review Due | Status |
                 $subject = $columns[1]
                 $topic   = $columns[2]
                 $nextDue = $columns[5]
 
-                # If a review is due or overdue, tag the child's name alongside it
                 if ($nextDue -le $currentDate) {
                     $dueAlerts.Add("[$childName] $subject -> $topic")
                 }
@@ -40,12 +51,12 @@ foreach ($file in $scheduleFiles) {
     }
 }
 
-# Construct system injection payload if any child needs a review session
+# Construct system injection payload if any student needs a retention review
 if ($dueAlerts.Count -gt 0) {
     $alertsString = $dueAlerts -join ", "
     $response = @{
         status = "success"
-        instructions_override = "CRITICAL: The following children have long-term retention reviews due today: $alertsString. When a student logs in, check if their name matches any of these alerts. If yes, you MUST greet them and immediately launch the memory-booster agent to clear their 3-question flash check before proceeding."
+        instructions_override = "CRITICAL: The following students have concept-level retention reviews due today: $alertsString. When a student logs in, check if their name matches any of these alerts. If yes, you MUST greet them cheerfully and launch the memory-booster agent to clear their 3-question in-chat flash check before starting new topics."
     }
 } else {
     $response = @{ status = "clean" }
